@@ -27,6 +27,8 @@ module PlutusCore.DeBruijn.Internal
     , tyNameToDeBruijn
     , deBruijnToName
     , deBruijnToTyName
+    , freeIndexThrow
+    , freeIndexGrace
     , HasIndex (..)
     ) where
 
@@ -39,6 +41,7 @@ import Control.Lens hiding (Index, Level, index, ix)
 import Control.Monad.Error.Lens
 import Control.Monad.Except
 import Control.Monad.Reader
+import Control.Monad.State
 
 import Data.Bimap qualified as BM
 import Data.Text qualified as T
@@ -133,7 +136,7 @@ We use a newtype to keep these separate, since getting it wrong will lead to ann
 -}
 
 -- | An absolute level in the program.
-newtype Level = Level Integer deriving newtype (Eq, Ord, Num)
+newtype Level = Level Integer deriving newtype (Eq, Ord, Num, Real, Enum, Integral)
 
 -- | During visiting the AST we hold a reader "state" of current level and a current scoping (levelMapping).
 -- Invariant-A: the current level is positive and greater than all levels in the levelMapping.
@@ -182,12 +185,15 @@ instance HasErrorCode FreeVariableError where
     errorCode  FreeUnique {} = ErrorCode 22
 
 -- | Get the 'Index' corresponding to a given 'Unique'.
-getIndex :: (MonadReader Levels m, AsFreeVariableError e, MonadError e m) => Unique -> m Index
-getIndex u = do
+-- Uses supplied handler for free names (uniques).
+getIndex :: MonadReader Levels m => Unique -> (Unique -> m Index) -> m Index
+getIndex u h = do
     Levels current ls <- ask
     case BM.lookup u ls of
         Just foundlvl -> pure $ levelToIx current foundlvl
-        Nothing       -> throwing _FreeVariableError $ FreeUnique u
+        Nothing       ->
+            -- the return index number should be larger than the current level; there no safety check for it.
+            h u
   where
     -- Compute the relative 'Index' of a absolute 'Level' relative to the current 'Level'.
     levelToIx :: Level -> Level -> Index
@@ -196,15 +202,19 @@ getIndex u = do
         -- and thus the computation 'current-foundLvl' is '>=0' and its conversion to Natural will not lead to arithmetic underflow.
         fromIntegral $ current - foundLvl
 
+    -- Because of invariant-B, the levelMapping contains only positive levels;
+    -- the lookup(negativeLvl) will fail by throwing a free variable error.
+
+
 -- | Get the 'Unique' corresponding to a given 'Index'.
-getUnique :: (MonadReader Levels m, AsFreeVariableError e, MonadError e m) => Index -> m Unique
-getUnique ix = do
+-- Uses supplied handler for free debruijn indices.
+getUnique :: MonadReader Levels m => Index -> (Index -> m Unique) -> m Unique
+getUnique ix h = do
     Levels current ls <- ask
     case BM.lookupR (ixToLevel current ix) ls of
         Just u  -> pure u
-        -- Because of invariant-B, the levelMapping contains only positive levels;
-        -- the lookup(negativeLvl) will fail by throwing a free variable error.
-        Nothing -> throwing _FreeVariableError $ FreeIndex ix
+        -- the handler should not return an already-bound unique, but there is no safety check for it.
+        Nothing -> h ix
   where
     -- Compute the absolute 'Level' of a relative 'Index' relative to the current 'Level'.
     -- The index `ixAST` may be malformed or point to a free variable because it comes straight from the AST;
@@ -228,7 +238,7 @@ fakeNameDeBruijn (DeBruijn ix) = NamedDeBruijn "i" ix
 nameToDeBruijn
     :: (MonadReader Levels m, AsFreeVariableError e, MonadError e m)
     => Name -> m NamedDeBruijn
-nameToDeBruijn (Name str u) = NamedDeBruijn str <$> getIndex u
+nameToDeBruijn (Name str u) = NamedDeBruijn str <$> getIndex u freeUniqueThrow
 
 tyNameToDeBruijn
     :: (MonadReader Levels m, AsFreeVariableError e, MonadError e m)
@@ -236,11 +246,42 @@ tyNameToDeBruijn
 tyNameToDeBruijn (TyName n) = NamedTyDeBruijn <$> nameToDeBruijn n
 
 deBruijnToName
-    :: (MonadReader Levels m, AsFreeVariableError e, MonadError e m)
-    => NamedDeBruijn -> m Name
-deBruijnToName (NamedDeBruijn str ix) = Name str <$> getUnique ix
+    :: MonadReader Levels m
+    => (Index -> m Unique)
+    -> NamedDeBruijn
+    -> m Name
+deBruijnToName h (NamedDeBruijn str ix) = Name str <$> getUnique ix h
 
 deBruijnToTyName
-    :: (MonadReader Levels m, AsFreeVariableError e, MonadError e m)
-    => NamedTyDeBruijn -> m TyName
-deBruijnToTyName (NamedTyDeBruijn n) = TyName <$> deBruijnToName n
+    :: MonadReader Levels m
+    => (Index -> m Unique)
+    -> NamedTyDeBruijn
+    -> m TyName
+deBruijnToTyName h (NamedTyDeBruijn n) = TyName <$> deBruijnToName h n
+
+-- | The default handler of throwing an error upon encountering a free name (unique).
+freeUniqueThrow :: (AsFreeVariableError e, MonadError e m) => Unique -> m Index
+freeUniqueThrow =
+    throwing _FreeVariableError . FreeUnique
+
+-- | The default handler of throwing an error upon encountering a free debruijn index.
+freeIndexThrow :: (AsFreeVariableError e, MonadError e m) => Index -> m Unique
+freeIndexThrow =
+    throwing _FreeVariableError . FreeIndex
+
+{-| A different implementation of a handler,  where "free" debruijn indices do not throw an error
+but are instead gracefully converted to fresh uniques.
+These generated uniques remain free; i.e.  if the original term was open, it will remain open after applying this handler.
+These generated free uniques are consistent across the open term (by using a state cache).
+-}
+freeIndexGrace :: (MonadReader Levels m, MonadState (BM.Bimap Unique Level) m, MonadQuote m) => Index -> m Unique
+freeIndexGrace ix = do
+    cache <- get
+    Levels current _ <- ask
+    let absoluteLevel =  Level (fromIntegral ix) - current
+    case BM.lookupR absoluteLevel cache of
+        Nothing -> do
+            u <- freshUnique
+            put (BM.insert u absoluteLevel cache)
+            pure u
+        Just u -> pure u
