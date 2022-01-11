@@ -2,25 +2,26 @@
 -- See the @plutus/plutus-core/docs/Constant application.md@
 -- article for how this emerged.
 
-{-# LANGUAGE BlockArguments          #-}
-{-# LANGUAGE ConstraintKinds         #-}
-{-# LANGUAGE DataKinds               #-}
-{-# LANGUAGE DefaultSignatures       #-}
-{-# LANGUAGE FlexibleInstances       #-}
-{-# LANGUAGE GADTs                   #-}
-{-# LANGUAGE LambdaCase              #-}
-{-# LANGUAGE MultiParamTypeClasses   #-}
-{-# LANGUAGE OverloadedStrings       #-}
-{-# LANGUAGE PolyKinds               #-}
-{-# LANGUAGE QuantifiedConstraints   #-}
-{-# LANGUAGE RankNTypes              #-}
-{-# LANGUAGE TypeApplications        #-}
-{-# LANGUAGE TypeFamilies            #-}
-{-# LANGUAGE TypeOperators           #-}
-{-# LANGUAGE UndecidableInstances    #-}
-{-# LANGUAGE UndecidableSuperClasses #-}
+{-# LANGUAGE BlockArguments           #-}
+{-# LANGUAGE ConstraintKinds          #-}
+{-# LANGUAGE DataKinds                #-}
+{-# LANGUAGE DefaultSignatures        #-}
+{-# LANGUAGE FlexibleInstances        #-}
+{-# LANGUAGE GADTs                    #-}
+{-# LANGUAGE LambdaCase               #-}
+{-# LANGUAGE MultiParamTypeClasses    #-}
+{-# LANGUAGE OverloadedStrings        #-}
+{-# LANGUAGE PolyKinds                #-}
+{-# LANGUAGE QuantifiedConstraints    #-}
+{-# LANGUAGE RankNTypes               #-}
+{-# LANGUAGE TypeApplications         #-}
+{-# LANGUAGE TypeFamilies             #-}
+{-# LANGUAGE TypeOperators            #-}
+{-# LANGUAGE UndecidableInstances     #-}
+{-# LANGUAGE UndecidableSuperClasses  #-}
 
-{-# LANGUAGE StrictData              #-}
+{-# LANGUAGE StandaloneKindSignatures #-}
+{-# LANGUAGE StrictData               #-}
 
 module PlutusCore.Constant.Typed
     ( TypeScheme (..)
