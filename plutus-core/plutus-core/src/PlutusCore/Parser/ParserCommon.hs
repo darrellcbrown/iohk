@@ -259,10 +259,12 @@ conInt = do
 -- | Parser for bytestring constants. They start with "#".
 conChar :: Parser (Some (ValueOf DefaultUni))
 conChar = do
-    con <- char '#' *> Text.Megaparsec.many hexDigitChar--Lex.charLiteral
+    con <- char '#' *> Text.Megaparsec.many hexDigitChar
     pure $ someValue $ T.pack con
 
 -- | Parser for string constants. They are wrapped in double quotes.
+-- Even though @takeWhile@ is more efficient, @manyTill@ is easier to use
+-- here and we don't care much about efficiency.
 conText :: Parser (Some (ValueOf DefaultUni))
 conText = do
     con <- char '\"' *> manyTill Lex.charLiteral (char '\"')
@@ -279,13 +281,43 @@ conBool = choice
     , someValue False <$ symbol "False"
     ]
 
---TODO fix these (add parsing of constant after symbol?):
--- conPair :: Parser (Some (ValueOf DefaultUni))
--- conPair = someValue (,) <$ symbol "pair"
--- conList :: Parser (Some (ValueOf DefaultUni))
--- conList = someValue [] <$ symbol "list"
--- conData :: Parser (Some (ValueOf DefaultUni))
--- conData = someValue Data? <$ symbol "data"
+constants :: Parser [Some (ValueOf DefaultUni)]
+constants = choice
+    [ try cons
+    , do
+        oneCon <- constant
+        pure [oneCon]
+    ]
+    where cons = do
+            con <- constant
+            _ <- symbol ","
+            maybeCons <- constants
+            pure $ con : maybeCons
+
+conList :: Parser (Some (ValueOf DefaultUni))
+conList = inBraces $ do
+    conFirst <- constant
+    list <- constants
+    pure $ someValue [conFirst] -- :list
+
+conPair :: Parser (Some (ValueOf DefaultUni))
+conPair = inBrackets $ do
+    conFirst <- constant
+    pairList <- constants
+    pure $ pairConst conFirst pairList
+
+pairConst ::
+    Some (ValueOf DefaultUni) ->
+    [Some (ValueOf DefaultUni)] -> Some (ValueOf DefaultUni)
+pairConst _t []       = error "pairConst: A pair without second."
+pairConst t [t']      = someValue (t, t')
+pairConst t (t' : ts) = someValue (someValue (t, t':init ts), last ts)
+
+conApp :: Parser (Some (ValueOf DefaultUni)) --FIXME
+conApp = pure $ someValue $ T.pack "app"
+
+conData :: Parser (Some (ValueOf DefaultUni)) --FIXME
+conData = pure $ someValue $ T.pack "data"
 
 constant :: Parser (Some (ValueOf DefaultUni))
 constant = choice $ map try

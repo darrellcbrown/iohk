@@ -66,11 +66,15 @@ conTerm = inParens $ do
     conTy <- defaultUniType -- TODO: do case of for each ty?
     con <-
         case conTy of
-            SomeTypeIn DefaultUniInteger    -> conInt
-            SomeTypeIn DefaultUniByteString -> conChar
-            SomeTypeIn DefaultUniString     -> conText
-            SomeTypeIn DefaultUniUnit       -> conUnit
-            SomeTypeIn DefaultUniBool       -> conBool
+            SomeTypeIn DefaultUniInteger     -> conInt
+            SomeTypeIn DefaultUniByteString  -> conChar
+            SomeTypeIn DefaultUniString      -> conText
+            SomeTypeIn DefaultUniUnit        -> conUnit
+            SomeTypeIn DefaultUniBool        -> conBool
+            SomeTypeIn DefaultUniProtoList   -> conList
+            SomeTypeIn DefaultUniProtoPair   -> conPair
+            SomeTypeIn (DefaultUniApply _ _)-> conApp
+            SomeTypeIn DefaultUniData        -> conData
     pure $ Constant p con
 
 builtinTerm :: Parser PTerm
