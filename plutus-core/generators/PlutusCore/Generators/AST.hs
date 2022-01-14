@@ -90,7 +90,7 @@ genConstant = Gen.choice
 genSomeTypeIn :: AstGen (SomeTypeIn DefaultUni)
 genSomeTypeIn = Gen.frequency
     [ (1, pure $ SomeTypeIn DefaultUniInteger)
-    -- , (1, pure $ SomeTypeIn DefaultUniByteString)
+    , (1, pure $ SomeTypeIn DefaultUniByteString)
     , (1, pure $ SomeTypeIn DefaultUniString)
     , (1, pure $ SomeTypeIn DefaultUniUnit)
     , (1, pure $ SomeTypeIn DefaultUniBool)

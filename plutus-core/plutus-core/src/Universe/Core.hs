@@ -441,7 +441,7 @@ runDecodeUniM is (DecodeUniM a) = runStateT a is
 -- @UList (UList UInt)@ can be encoded to @[0,0,1]@ where @0@ and @1@ are the integer tags of the
 -- @UList@ and @UInt@ constructors, respectively.
 class Closed uni where
-    -- | A constrant for \"@constr a@ holds for any @a@ from @uni@\".
+    -- | A constraint for \"@constr a@ holds for any @a@ from @uni@\".
     type Everywhere uni (constr :: Type -> Constraint) :: Constraint
 
     -- | Encode a type as a sequence of 'Int' tags.

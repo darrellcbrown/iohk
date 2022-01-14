@@ -135,9 +135,8 @@ defaultUniType = choice $ map try
   , SomeTypeIn DefaultUniString <$ symbol "string"
   , SomeTypeIn DefaultUniUnit <$ symbol "unit"
   , SomeTypeIn DefaultUniBool <$ symbol "bool"
---   , SomeTypeIn DefaultUniProtoList <$ symbol "list"
+--   , SomeTypeIn DefaultUniList <$ symbol "list"
 --   , SomeTypeIn DefaultUniProtoPair <$ symbol "pair"
-  -- , SomeTypeIn DefaultUniApply <$ symbol "?" TODO need to make this an operator
     ]
 
 inParens :: Parser a -> Parser a
@@ -281,43 +280,55 @@ conBool = choice
     , someValue False <$ symbol "False"
     ]
 
-constants :: Parser [Some (ValueOf DefaultUni)]
-constants = choice
-    [ try cons
+constants :: SomeTypeIn DefaultUni -> Parser [Some (ValueOf DefaultUni)]
+constants ty = choice
+    [ try (cons ty)
     , do
         oneCon <- constant
         pure [oneCon]
     ]
-    where cons = do
-            con <- constant
+    where cons dType = do
+            con <- conParser dType
             _ <- symbol ","
-            maybeCons <- constants
+            maybeCons <- constants dType
             pure $ con : maybeCons
 
-conList :: Parser (Some (ValueOf DefaultUni))
-conList = inBraces $ do
+mkList :: SomeTypeIn DefaultUni -> Some (ValueOf DefaultUni) -> Maybe [Some (ValueOf DefaultUni)] -> Some (ValueOf DefaultUni)
+mkList (SomeTypeIn ty) hd Nothing =
+    case hd of
+        (Some (ValueOf ty x)) -> Some $ ValueOf (DefaultUniList ty) [x]
+        _                     -> error $ "mkList: item" <> show x <> "in the list has the wrong type."
+mkList (SomeTypeIn ty) hd (Just tail) =
+    case (hd, tail) of
+        (Some (ValueOf ty x), [Some (ValueOf ty y)]) ->
+            Some $ ValueOf (DefaultUniList ty) [x,y]
+        (Some (ValueOf ty x), hd:xs) ->
+            Some $ ValueOf (DefaultUniList ty) $ x:mkList hd xs
+        (_, _) -> error "mkList: type error, items in the lists are not of the right types."
+
+-- conList :: PType -> Parser (Some (ValueOf DefaultUni))
+conList ty = inBraces $ do
     conFirst <- constant
-    list <- constants
-    pure $ someValue [conFirst] -- :list
+    list <- constants ty
+    pure $ ValueOf ty conFirst
+
+mkPair :: Some (ValueOf DefaultUni) -> Some (ValueOf DefaultUni) -> Some (ValueOf DefaultUni)
+mkPair (Some (ValueOf uniA x)) (Some (ValueOf uniB y)) = Some $ ValueOf (DefaultUniPair uniA uniB) (x, y)
 
 conPair :: Parser (Some (ValueOf DefaultUni))
 conPair = inBrackets $ do
     conFirst <- constant
-    pairList <- constants
-    pure $ pairConst conFirst pairList
+    pairConst conFirst <$> constants
 
-pairConst ::
-    Some (ValueOf DefaultUni) ->
+pairConst :: Some (ValueOf DefaultUni) ->
     [Some (ValueOf DefaultUni)] -> Some (ValueOf DefaultUni)
 pairConst _t []       = error "pairConst: A pair without second."
-pairConst t [t']      = someValue (t, t')
-pairConst t (t' : ts) = someValue (someValue (t, t':init ts), last ts)
+pairConst t [t']      = mkPair t t'
+pairConst t (t' : ts) = mkPair (pairConst t (t':init ts)) (last ts)
 
-conApp :: Parser (Some (ValueOf DefaultUni)) --FIXME
-conApp = pure $ someValue $ T.pack "app"
-
-conData :: Parser (Some (ValueOf DefaultUni)) --FIXME
-conData = pure $ someValue $ T.pack "data"
+-- | Empty parser to complete case matching of conParser.
+conEmpty :: Parser (Some (ValueOf DefaultUni)) --FIXME
+conEmpty = pure $ someValue $ T.pack "conEmpty: Not Implemented."
 
 constant :: Parser (Some (ValueOf DefaultUni))
 constant = choice $ map try

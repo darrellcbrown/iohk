@@ -59,22 +59,25 @@ appTerms = choice
             tms <- appTerms
             pure $ tm : tms
 
+conParser :: SomeTypeIn DefaultUni -> Parser (Some (ValueOf DefaultUni))
+conParser (SomeTypeIn DefaultUniInteger)     = conInt
+conParser (SomeTypeIn DefaultUniByteString)  = conChar
+conParser (SomeTypeIn DefaultUniString)      = conText
+conParser (SomeTypeIn DefaultUniUnit)        = conUnit
+conParser (SomeTypeIn DefaultUniBool)        = conBool
+conParser (SomeTypeIn (DefaultUniList a))    = conList a
+conParser (SomeTypeIn (DefaultUniPair a b))  = conPair
+conParser (SomeTypeIn DefaultUniProtoList )  = conEmpty
+conParser (SomeTypeIn DefaultUniProtoPair )  = conEmpty
+conParser (SomeTypeIn (DefaultUniApply _ _)) = conEmpty
+conParser (SomeTypeIn DefaultUniData)        = conEmpty
+
 -- | Parser for a constant term. Currently the syntax is "con defaultUniType val".
 conTerm :: Parser PTerm
 conTerm = inParens $ do
     p <- wordPos "con"
-    conTy <- defaultUniType -- TODO: do case of for each ty?
-    con <-
-        case conTy of
-            SomeTypeIn DefaultUniInteger     -> conInt
-            SomeTypeIn DefaultUniByteString  -> conChar
-            SomeTypeIn DefaultUniString      -> conText
-            SomeTypeIn DefaultUniUnit        -> conUnit
-            SomeTypeIn DefaultUniBool        -> conBool
-            SomeTypeIn DefaultUniProtoList   -> conList
-            SomeTypeIn DefaultUniProtoPair   -> conPair
-            SomeTypeIn (DefaultUniApply _ _)-> conApp
-            SomeTypeIn DefaultUniData        -> conData
+    conTy <- defaultUniType
+    con <- conParser conTy
     pure $ Constant p con
 
 builtinTerm :: Parser PTerm
